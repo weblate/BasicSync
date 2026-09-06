@@ -27,4 +27,9 @@
     <string name="pref_network_conditions_desc">Run when connected to certain network types or Wi-Fi networks.</string>
     <string name="pref_run_on_battery_name">Run on battery power</string>
     <string name="pref_run_on_battery_desc">Run when the device is on battery power and the battery level is at least %1$d%%. Syncthing always runs when plugged in.</string>
+    <string name="pref_header_notifications">Notifications</string>
+    <string name="pref_allow_local_network_name">Allow local network access</string>
+    <string name="pref_allow_local_network_desc">Needed to connect to devices on the local network directly instead of passing through Syncthing\'s relay servers.</string>
+    <string name="pref_local_storage_access_desc">Needed for Syncthing to have direct file access to internal and external storage.</string>
+    <string name="pref_saf_folder_access_name">Allow folder access</string>
 </resources>
