@@ -199,4 +199,5 @@
     <string name="dialog_storage_type_saf_desc">Hanya memberikan izin ke folder yang dipilih, tetapi lebih lambat dan dapat menyebabkan kesalahan sinkronisasi yang tidak diharapkan.</string>
     <string name="notification_channel_persistent_name_started">Notifikasi persisten saat dimulai</string>
     <string name="notification_channel_persistent_name_stopped">Notifikasi persisten saat dihentikan</string>
+    <string name="pref_network_allow_roaming_name">Izinkan data seluler (roaming)</string>
 </resources>
