@@ -7,6 +7,10 @@
     to update the actual links at the bottom of the file.
 -->
 
+### Unreleased
+
+* Show state transition timestamps in notification body ([Issue #268], [PR #272])
+
 ### Version 3.22
 
 * Update syncthing to 2.1.6 ([PR #269])
@@ -437,6 +441,7 @@
 [Issue #251]: https://github.com/chenxiaolong/BasicSync/issues/251
 [Issue #258]: https://github.com/chenxiaolong/BasicSync/issues/258
 [Issue #263]: https://github.com/chenxiaolong/BasicSync/issues/263
+[Issue #268]: https://github.com/chenxiaolong/BasicSync/issues/268
 [PR #2]: https://github.com/chenxiaolong/BasicSync/pull/2
 [PR #3]: https://github.com/chenxiaolong/BasicSync/pull/3
 [PR #4]: https://github.com/chenxiaolong/BasicSync/pull/4
@@ -625,3 +630,4 @@
 [PR #265]: https://github.com/chenxiaolong/BasicSync/pull/265
 [PR #266]: https://github.com/chenxiaolong/BasicSync/pull/266
 [PR #269]: https://github.com/chenxiaolong/BasicSync/pull/269
+[PR #272]: https://github.com/chenxiaolong/BasicSync/pull/272
