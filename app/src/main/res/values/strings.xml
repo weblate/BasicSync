@@ -384,6 +384,15 @@
         <item quantity="other">• %d devices pending sync</item>
     </plurals>
 
+    <!-- Timestamp of when Syncthing was last started. -->
+    <string name="timestamp_started_at">• Started at %s</string>
+    <!-- Timestamp of when Syncthing was last stopped. -->
+    <string name="timestamp_stopped_at">• Stopped at %s</string>
+    <!-- Timestamp that Syncthing will start again when the sync schedule feature is enabled. -->
+    <string name="timestamp_starting_at">• Starting at %s</string>
+    <!-- Timestamp that Syncthing will stop again when the sync schedule feature is enabled. -->
+    <string name="timestamp_stopping_at">• Stopping at %s</string>
+
     <!-- Text shown in quick settings tile when in auto mode. Keep text as short as possible. -->
     <string name="quick_settings_tile_auto_mode">Auto mode</string>
     <!-- Text shown in quick settings tile when in manual mode and Syncthing is started. Keep text as short as possible. -->

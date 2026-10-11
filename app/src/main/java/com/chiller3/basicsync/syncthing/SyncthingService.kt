@@ -176,7 +176,7 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
             get() = this == RUNNING || this == STARTING
 
         val showFolderStates: Boolean
-            get() = this == RUNNING
+            get() = this == RUNNING || this == PAUSED
 
         val showBlockedReasons: Boolean
             get() = this == NOT_RUNNING || this == PAUSED
@@ -188,6 +188,8 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
     data class ServiceState(
         private val keepAlive: Boolean,
         val blockedReasons: EnumSet<BlockedReason>,
+        val lastTransition: ScheduleEvent?,
+        val nextTransition: ScheduleEvent?,
         private val isStarted: Boolean,
         private val isResumed: Boolean,
         private val manualMode: Boolean,
@@ -213,7 +215,9 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
                     && useLocation == prev.useLocation
                     && showDetails == prev.showDetails
                     && showExit == prev.showExit
-                    && (!showDetails || (folderStates == prev.folderStates
+                    && (!showDetails || (lastTransition == prev.lastTransition
+                            && nextTransition == prev.nextTransition
+                            && folderStates == prev.folderStates
                             && deviceStates == prev.deviceStates))
 
         private val shouldResume: Boolean
@@ -479,6 +483,8 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
     @GuardedBy("stateLock")
     private var syncthingApp: SyncthingApp? = null
     @GuardedBy("stateLock")
+    private var lastTransition: ScheduleEvent? = null
+    @GuardedBy("stateLock")
     private var syncthingConflicts = ConflictsInfo()
         set(conflicts) {
             if (field != conflicts) {
@@ -723,12 +729,16 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
                 return
             }
 
+            val isManualMode = prefs.isManualMode
+
             val serviceState = ServiceState(
                 keepAlive = prefs.keepAlive,
                 blockedReasons = blockedReasons,
+                lastTransition = lastTransition,
+                nextTransition = deviceState.nextTransition.takeIf { !isManualMode },
                 isStarted = isStarted,
                 isResumed = isResumed,
-                manualMode = prefs.isManualMode,
+                manualMode = isManualMode,
                 manualShouldRun = prefs.manualShouldRun,
                 allowAutoMode = prefs.allowAutoMode,
                 preRunAction = currentPreRunAction,
@@ -794,6 +804,12 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
             if (!needFullRestart && app != null && prefs.keepAlive) {
                 Log.d(TAG, "Keep alive enabled; changing connect allowed to $shouldResume")
                 app.isConnectAllowed = shouldResume
+
+                lastTransition = if (shouldResume) {
+                    ScheduleEvent.WindowStart(System.currentTimeMillis())
+                } else {
+                    ScheduleEvent.WindowEnd(System.currentTimeMillis())
+                }
             } else if (app != null) {
                 Log.d(TAG, "Syncthing is running; stopping service")
                 app.stopAsync()
@@ -949,6 +965,7 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
 
         synchronized(stateLock) {
             syncthingApp = app
+            lastTransition = ScheduleEvent.WindowStart(System.currentTimeMillis())
 
             stateChanged()
         }
@@ -964,6 +981,7 @@ class SyncthingService : Service(), SyncthingStatusReceiver, DeviceStateListener
             syncthingFolderStates = FolderStates()
             syncthingDeviceStates = DeviceStates()
             syncthingApp = null
+            lastTransition = ScheduleEvent.WindowEnd(System.currentTimeMillis())
 
             stateChanged()
         }

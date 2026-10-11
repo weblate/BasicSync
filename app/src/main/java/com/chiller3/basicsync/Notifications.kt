@@ -11,12 +11,22 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.icu.text.DateTimePatternGenerator
+import android.icu.util.ULocale
 import android.os.Build
+import android.text.format.DateFormat
+import androidx.annotation.StringRes
 import com.chiller3.basicsync.extension.toSingleLineString
 import com.chiller3.basicsync.settings.ConflictsActivity
 import com.chiller3.basicsync.settings.SettingsActivity
 import com.chiller3.basicsync.settings.WebUiActivity
+import com.chiller3.basicsync.syncthing.BlockedReason
+import com.chiller3.basicsync.syncthing.ScheduleEvent
 import com.chiller3.basicsync.syncthing.SyncthingService
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 
 class Notifications(private val context: Context) {
     companion object {
@@ -93,6 +103,37 @@ class Notifications(private val context: Context) {
         LEGACY_CHANNEL_IDS.forEach { notificationManager.deleteNotificationChannel(it) }
     }
 
+    private fun getTimeFormatter(): DateTimeFormatter {
+        val uLocale = ULocale.forLocale(context.resources.configuration.locales[0])
+        val generator = DateTimePatternGenerator.getInstance(uLocale)
+        val pattern = if (DateFormat.is24HourFormat(context)) {
+            generator.getBestPattern("Hms")
+        } else {
+            generator.getBestPattern("hms")
+        }
+
+        return DateTimeFormatterBuilder()
+            .appendPattern(pattern)
+            .toFormatter()
+    }
+
+    private fun formatTransition(
+        transition: ScheduleEvent,
+        @StringRes startResId: Int,
+        @StringRes stopResId: Int,
+    ): String {
+        val instant = Instant.ofEpochMilli(transition.timeMs)
+        val dateTime = instant.atZone(ZoneId.systemDefault())
+        val timeFormatter = getTimeFormatter()
+
+        return when (transition) {
+            is ScheduleEvent.WindowStart ->
+                context.getString(startResId, timeFormatter.format(dateTime))
+            is ScheduleEvent.WindowEnd, is ScheduleEvent.IdleEnd ->
+                context.getString(stopResId, timeFormatter.format(dateTime))
+        }
+    }
+
     fun createPersistentNotification(state: SyncthingService.ServiceState): Pair<Int, Notification> {
         val runState = state.runState
         val titleResId = when (runState) {
@@ -117,40 +158,81 @@ class Notifications(private val context: Context) {
             setOngoing(true)
             setOnlyAlertOnce(true)
 
-            if (state.showDetails && runState.showFolderStates) {
-                setContentText(buildString {
-                    append(context.resources.getQuantityString(
-                        R.plurals.device_state_connected,
-                        state.deviceStates.connected,
-                        state.deviceStates.connected,
-                    ))
+            val text = buildString {
+                var nonScheduleBlockedReasons = false
 
-                    for ((resId, count) in arrayOf(
-                        R.plurals.device_state_syncing to state.deviceStates.syncing,
-                        R.plurals.device_state_pending to state.deviceStates.pending,
-                        R.plurals.folder_state_idle to state.folderStates.idle,
-                        R.plurals.folder_state_scanning to state.folderStates.scanning,
-                        R.plurals.folder_state_syncing to state.folderStates.syncing,
-                        R.plurals.folder_state_cleaning to state.folderStates.cleaning,
-                        R.plurals.folder_state_errored to state.folderStates.errored,
-                        R.plurals.folder_state_starting to state.folderStates.starting,
-                    )) {
-                        if (count > 0) {
-                            append('\n')
-                            append(context.resources.getQuantityString(resId, count, count))
-                        }
-                    }
-                })
-                style = Notification.BigTextStyle()
-            } else if (runState.showBlockedReasons) {
-                setContentText(buildString {
+                if (runState.showBlockedReasons) {
                     for ((i, reason) in state.blockedReasons.withIndex()) {
                         if (i > 0) {
                             append('\n')
                         }
                         append(reason.toString(context.resources))
+
+                        if (reason != BlockedReason.TIME_SCHEDULE) {
+                            nonScheduleBlockedReasons = true
+                        }
                     }
-                })
+                }
+
+                if (state.showDetails) {
+                    if (runState.showFolderStates) {
+                        if (isNotEmpty()) {
+                            append('\n')
+                        }
+
+                        append(context.resources.getQuantityString(
+                            R.plurals.device_state_connected,
+                            state.deviceStates.connected,
+                            state.deviceStates.connected,
+                        ))
+
+                        for ((resId, count) in arrayOf(
+                            R.plurals.device_state_syncing to state.deviceStates.syncing,
+                            R.plurals.device_state_pending to state.deviceStates.pending,
+                            R.plurals.folder_state_idle to state.folderStates.idle,
+                            R.plurals.folder_state_scanning to state.folderStates.scanning,
+                            R.plurals.folder_state_syncing to state.folderStates.syncing,
+                            R.plurals.folder_state_cleaning to state.folderStates.cleaning,
+                            R.plurals.folder_state_errored to state.folderStates.errored,
+                            R.plurals.folder_state_starting to state.folderStates.starting,
+                        )) {
+                            if (count > 0) {
+                                append('\n')
+                                append(context.resources.getQuantityString(resId, count, count))
+                            }
+                        }
+                    }
+
+                    if (state.lastTransition != null) {
+                        if (isNotEmpty()) {
+                            append('\n')
+                        }
+
+                        append(formatTransition(
+                            state.lastTransition,
+                            R.string.timestamp_started_at,
+                            R.string.timestamp_stopped_at,
+                        ))
+                    }
+
+                    // Don't show a misleading line about when the next run will be if there are
+                    // other reasons that Syncthing cannot run.
+                    if (state.nextTransition != null && !nonScheduleBlockedReasons) {
+                        if (isNotEmpty()) {
+                            append('\n')
+                        }
+
+                        append(formatTransition(
+                            state.nextTransition,
+                            R.string.timestamp_starting_at,
+                            R.string.timestamp_stopping_at,
+                        ))
+                    }
+                }
+            }
+
+            if (text.isNotEmpty()) {
+                setContentText(text)
                 style = Notification.BigTextStyle()
             }
 

@@ -1067,6 +1067,8 @@ private fun PreviewSettingsScreen() {
     val serviceState = SyncthingService.ServiceState(
         keepAlive = false,
         blockedReasons = EnumSet.noneOf(BlockedReason::class.java),
+        lastTransition = null,
+        nextTransition = null,
         isStarted = true,
         isResumed = true,
         manualMode = false,

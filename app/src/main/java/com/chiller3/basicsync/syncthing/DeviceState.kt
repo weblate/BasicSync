@@ -85,6 +85,16 @@ enum class BlockedReason {
         get() = this == NO_STORAGE_PERMISSIONS
 }
 
+sealed interface ScheduleEvent {
+    val timeMs: Long
+
+    data class WindowStart(override val timeMs: Long) : ScheduleEvent
+
+    data class WindowEnd(override val timeMs: Long) : ScheduleEvent
+
+    data class IdleEnd(override val timeMs: Long) : ScheduleEvent
+}
+
 data class DeviceState(
     val isNetworkConnected: Boolean = false,
     val isNetworkUnmetered: Boolean = false,
@@ -96,6 +106,7 @@ data class DeviceState(
     val isAutoSyncData: Boolean = false,
     val isInTimeWindow: Boolean = false,
     val idleStart: Long = -1,
+    val nextTransition: ScheduleEvent? = null,
     val busyFolders: Int = 0,
     val connectedDevices: Int = 0,
     val connectedOnce: Boolean = false,
@@ -444,7 +455,10 @@ class DeviceStateTracker(private val context: Context) :
                 scheduleAction -> {
                     alarmManager.cancel(schedulePendingIntent)
 
-                    val canRun = if (prefs.syncSchedule) {
+                    val nextTransition: ScheduleEvent?
+                    val canRun: Boolean
+
+                    if (prefs.syncSchedule) {
                         val cycleDurationMs = max(prefs.scheduleCycleMs, MINIMUM_CYCLE_MS)
                         val syncDurationMs = max(prefs.scheduleSyncMs, MINIMUM_SYNC_MS)
                         val syncIdleMs = max(prefs.scheduleIdleMs, MINIMUM_IDLE_MS)
@@ -463,46 +477,55 @@ class DeviceStateTracker(private val context: Context) :
 
                         val inWindow = now in windowStart until windowEnd
 
-                        val (label, nextCheckMs) = if (!inWindow) {
-                            "window_start" to windowStart + cycleDurationMs
+                        nextTransition = if (!inWindow) {
+                            ScheduleEvent.WindowStart(windowStart + cycleDurationMs)
                         } else if (!endIsIdle) {
-                            "window_end" to windowEnd
+                            ScheduleEvent.WindowEnd(windowEnd)
                         } else {
-                            "idle_end" to windowEnd
+                            ScheduleEvent.IdleEnd(windowEnd)
                         }
 
                         val exact = AlarmManagerCompat.canScheduleExactAlarms(alarmManager)
                         if (exact) {
                             alarmManager.setExactAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP,
-                                nextCheckMs,
+                                nextTransition.timeMs,
                                 schedulePendingIntent,
                             )
                         } else {
                             alarmManager.setAndAllowWhileIdle(
                                 AlarmManager.RTC_WAKEUP,
-                                nextCheckMs,
+                                nextTransition.timeMs,
                                 schedulePendingIntent,
                             )
                         }
 
-                        Log.d(TAG, "Scheduled next alarm: for=$label, wait=${nextCheckMs - now}, " +
-                                "inWindow=$inWindow, exact=$exact")
+                        Log.d(TAG, "Scheduled next alarm: transition=${nextTransition}, " +
+                                "wait=${nextTransition.timeMs - now}, inWindow=$inWindow, " +
+                                "exact=$exact")
 
-                        inWindow
+                        canRun = inWindow
                     } else {
                         Log.d(TAG, "Sync schedule is disabled")
-                        true
+
+                        nextTransition = null
+                        canRun = true
                     }
 
-                    if (!state.isInTimeWindow && canRun) {
-                        state = state.copy(
+                    state = if (!state.isInTimeWindow && canRun) {
+                        state.copy(
                             isInTimeWindow = true,
                             idleStart = -1,
+                            nextTransition = nextTransition,
                             connectedOnce = false,
                         )
                     } else if (state.isInTimeWindow && !canRun) {
-                        state = state.copy(isInTimeWindow = false)
+                        state.copy(
+                            isInTimeWindow = false,
+                            nextTransition = nextTransition,
+                        )
+                    } else {
+                        state.copy(nextTransition = nextTransition)
                     }
                 }
             }
